@@ -46,16 +46,16 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            echo "ARCHIVE_NAME=${{ env.BINARY_NAME }}-v${{ github.ref_name }}-${{ matrix.binary_target }}.zip" >> $GITHUB_ENV
+            echo "archive_name=${{ env.BINARY_NAME }}-v${{ github.ref_name }}-${{ matrix.binary_target }}.zip" >> $GITHUB_OUTPUT
           else
-            echo "ARCHIVE_NAME=${{ env.BINARY_NAME }}-v${{ github.ref_name }}-${{ matrix.binary_target }}.tar.gz" >> $GITHUB_ENV
+            echo "archive_name=${{ env.BINARY_NAME }}-v${{ github.ref_name }}-${{ matrix.binary_target }}.tar.gz" >> $GITHUB_OUTPUT
           fi
 
       - name: Prepare binary (Unix)
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.binary_target }}/release
-          tar -czf ../../../${{ env.ARCHIVE_NAME }} ${{ env.BINARY_NAME }}
+          tar -czf ../../../${{ steps.archive.outputs.archive_name }} ${{ env.BINARY_NAME }}
           cd -
 
       - name: Prepare binary (Windows)
@@ -64,14 +64,14 @@ jobs:
         run: |
           cd target/${{ matrix.binary_target }}/release
           $BINARY_NAME = "${{ env.BINARY_NAME }}.exe"
-          Compress-Archive -Path $BINARY_NAME -DestinationPath ../../../${{ env.ARCHIVE_NAME }}
+          Compress-Archive -Path $BINARY_NAME -DestinationPath ../../../${{ steps.archive.outputs.archive_name }}
           cd -
 
       - name: Upload Release Asset
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.ARCHIVE_NAME }}
-          asset_name: ${{ env.ARCHIVE_NAME }}
+          file: ${{ steps.archive.outputs.archive_name }}
+          asset_name: ${{ steps.archive.outputs.archive_name }}
           tag: ${{ github.ref }}
           overwrite: true
