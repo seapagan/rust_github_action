@@ -1,4 +1,4 @@
-name: Build and Release
+name: Publish
 
 on:
   push:
@@ -6,86 +6,30 @@ on:
       - "*"
 
 jobs:
-  build:
-    name: Build ${{ matrix.binary_target }}
+  publish:
+    name: Publish for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    env:
-      BINARY_NAME: rust_github_action
     strategy:
-      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            binary_target: x86_64-unknown-linux-musl
-          - os: ubuntu-latest
-            binary_target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            binary_target: aarch64-unknown-linux-gnu
-          - os: ubuntu-latest
-            binary_target: armv7-unknown-linux-gnueabihf
+            artifact_name: rust_github_action
+            asset_name: rust_github_action-linux-amd64
           - os: windows-latest
-            binary_target: x86_64-pc-windows-msvc
+            artifact_name: rust_github_action.exe
+            asset_name: rust_github_action-windows-amd64
           - os: macos-latest
-            binary_target: x86_64-apple-darwin
-          - os: macos-latest
-            binary_target: aarch64-apple-darwin
+            artifact_name: rust_github_action
+            asset_name: rust_github_action-macos-amd64
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install musl tools
-        if: matrix.binary_target == 'x86_64-unknown-linux-musl'
-        run: sudo apt-get install -y musl-tools
-
-      - name: Install ARM cross-compilation tools
-        if:
-          matrix.binary_target == 'aarch64-unknown-linux-gnu' ||
-          matrix.binary_target == 'armv7-unknown-linux-gnueabihf'
-        run: |
-          sudo apt-get update
-          if [[ "${{ matrix.binary_target }}" == "aarch64-unknown-linux-gnu" ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          elif [[ "${{ matrix.binary_target }}" == "armv7-unknown-linux-gnueabihf" ]]; then
-            sudo apt-get install -y gcc-arm-linux-gnueabihf
-          fi
-
-      - name: Install target
-        run: rustup target add ${{ matrix.binary_target }}
-
-      - name: Build binary
-        run: cargo build --release --target ${{ matrix.binary_target }}
-
-      - name: Set archive name
-        id: archive
-        shell: bash
-        run: |
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            echo "ARCHIVE_NAME=${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.binary_target }}.zip" >> $GITHUB_ENV
-          else
-            echo "ARCHIVE_NAME=${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.binary_target }}.tar.gz" >> $GITHUB_ENV
-          fi
-
-      - name: Prepare binary (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          cd target/${{ matrix.binary_target }}/release
-          tar -czf ../../../${{ env.ARCHIVE_NAME }} ${{ env.BINARY_NAME }}
-          cd -
-
-      - name: Prepare binary (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          cd target/${{ matrix.binary_target }}/release
-          $BINARY_NAME = "${{ env.BINARY_NAME }}.exe"
-          Compress-Archive -Path $BINARY_NAME -DestinationPath ../../../${{ env.ARCHIVE_NAME }}
-          cd -
-
-      - name: Upload Release Asset
+      - uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --release --locked
+      - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.ARCHIVE_NAME }}
+          file: target/release/${{ matrix.artifact_name }}
+          asset_name: ${{ matrix.asset_name }}
           tag: ${{ github.ref }}
-          overwrite: true
