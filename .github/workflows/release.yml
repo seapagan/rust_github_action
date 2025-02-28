@@ -9,6 +9,8 @@ jobs:
   build:
     name: Build ${{ matrix.binary_target }}
     runs-on: ${{ matrix.os }}
+    env:
+      BINARY_NAME: rust_github_action
     strategy:
       fail-fast: false
       matrix:
@@ -54,12 +56,21 @@ jobs:
       - name: Build binary
         run: cargo build --release --target ${{ matrix.binary_target }}
 
+      - name: Set archive name
+        id: archive
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            echo "ARCHIVE_NAME=${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.binary_target }}.zip" >> $GITHUB_ENV
+          else
+            echo "ARCHIVE_NAME=${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.binary_target }}.tar.gz" >> $GITHUB_ENV
+          fi
+
       - name: Prepare binary (Unix)
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.binary_target }}/release
-          BINARY_NAME="bundlerepo"
-          tar -czf ../../../bundlerepo-${{ github.ref_name }}-${{ matrix.binary_target }}.tar.gz $BINARY_NAME
+          tar -czf ../../../${{ env.ARCHIVE_NAME }} ${{ env.BINARY_NAME }}
           cd -
 
       - name: Prepare binary (Windows)
@@ -67,26 +78,14 @@ jobs:
         shell: pwsh
         run: |
           cd target/${{ matrix.binary_target }}/release
-          $BINARY_NAME = "bundlerepo.exe"
-          Compress-Archive -Path $BINARY_NAME -DestinationPath ../../../bundlerepo-${{ github.ref_name }}-${{ matrix.binary_target }}.zip
+          $BINARY_NAME = "${{ env.BINARY_NAME }}.exe"
+          Compress-Archive -Path $BINARY_NAME -DestinationPath ../../../${{ env.ARCHIVE_NAME }}
           cd -
 
-      - name: Upload Release Asset (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: Upload Release Asset
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file:
-            bundlerepo-${{ github.ref_name }}-${{ matrix.binary_target }}.tar.gz
-          tag: ${{ github.ref }}
-          overwrite: true
-
-      - name: Upload Release Asset (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file:
-            bundlerepo-${{ github.ref_name }}-${{ matrix.binary_target }}.zip
+          file: ${{ env.ARCHIVE_NAME }}
           tag: ${{ github.ref }}
           overwrite: true
